@@ -1,7 +1,6 @@
 import {isIdentifierStart, isIdentifierChar} from "./identifier.js"
 import {Parser} from "./state.js"
-import UNICODE_PROPERTY_VALUES from "./unicode-property-data.js"
-import {hasOwn, codePointToString} from "./util.js"
+import {codePointToString} from "./util.js"
 
 const pp = Parser.prototype
 
@@ -35,7 +34,6 @@ export class RegExpValidationState {
   constructor(parser) {
     this.parser = parser
     this.validFlags = `gim${parser.options.ecmaVersion >= 6 ? "uy" : ""}${parser.options.ecmaVersion >= 9 ? "s" : ""}${parser.options.ecmaVersion >= 13 ? "d" : ""}${parser.options.ecmaVersion >= 15 ? "v" : ""}`
-    this.unicodeProperties = UNICODE_PROPERTY_VALUES[parser.options.ecmaVersion >= 14 ? 14 : parser.options.ecmaVersion]
     this.source = ""
     this.flags = ""
     this.start = 0
@@ -98,7 +96,7 @@ export class RegExpValidationState {
     }
     let c = s.charCodeAt(i), next
     if (!(forceU || this.switchU) || c <= 0xD7FF || c >= 0xE000 || i + 1 >= l ||
-        (next = s.charCodeAt(i + 1)) < 0xDC00 || next > 0xDFFF) {
+      (next = s.charCodeAt(i + 1)) < 0xDC00 || next > 0xDFFF) {
       return i + 1
     }
     return i + 2
@@ -247,7 +245,7 @@ pp.regexp_disjunction = function(state) {
 
 // https://www.ecma-international.org/ecma-262/8.0/#prod-Alternative
 pp.regexp_alternative = function(state) {
-  while (state.pos < state.source.length && this.regexp_eatTerm(state)) {}
+  while (state.pos < state.source.length && this.regexp_eatTerm(state)) { }
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/#prod-annexB-Term
@@ -917,15 +915,29 @@ pp.regexp_eatUnicodePropertyValueExpression = function(state) {
 }
 
 pp.regexp_validateUnicodePropertyNameAndValue = function(state, name, value) {
-  if (!hasOwn(state.unicodeProperties.nonBinary, name))
+  if (!/^(General_Category|Script(_Extensions)?|gc|scx?)$/.test(name))
     state.raise("Invalid property name")
-  if (!state.unicodeProperties.nonBinary[name].test(value))
+  try {
+    // eslint-disable-next-line no-new
+    new RegExp(`\\p{${name}=${value}}`, "u")
+  } catch (_) {
     state.raise("Invalid property value")
+  }
 }
 
 pp.regexp_validateUnicodePropertyNameOrValue = function(state, nameOrValue) {
-  if (state.unicodeProperties.binary.test(nameOrValue)) return CharSetOk
-  if (state.switchV && state.unicodeProperties.binaryOfStrings.test(nameOrValue)) return CharSetString
+  try {
+    // eslint-disable-next-line no-new
+    new RegExp(`\\p{${nameOrValue}}`, "u")
+    return CharSetOk
+  } catch (_) { }
+  if (state.switchV) {
+    try {
+      // eslint-disable-next-line no-new
+      new RegExp(`\\p{${nameOrValue}}`, "v")
+      return CharSetString
+    } catch (_) { }
+  }
   state.raise("Invalid property name")
 }
 
@@ -1096,7 +1108,7 @@ pp.regexp_classSetExpression = function(state) {
     state.raise("Invalid character in character class")
   }
   // https://tc39.es/ecma262/#prod-ClassUnion
-  for (;;) {
+  for (; ;) {
     if (this.regexp_eatClassSetRange(state)) continue
     subResult = this.regexp_eatClassSetOperand(state)
     if (!subResult) return result

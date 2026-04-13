@@ -36,8 +36,7 @@
     "test:test262": "node bin/run_test262.js"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.2",
+    "@babel/standalone": "^7.29.2",
     "@eslint/js": "^9.39.2",
     "@rollup/plugin-buble": "^1.0.3",
     "@unicode/unicode-17.0.0": "^1.6.16",
