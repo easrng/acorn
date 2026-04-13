@@ -32,6 +32,7 @@
   require("./tests-import-attributes.js");
   require("./tests-using.js");
   require("./tests-commonjs.js");
+  require("./tests-import-phases.js");
   var acorn = require("../acorn/dist/acorn-functional.mjs")
   var acorn_loose = require("../acorn-loose")
 

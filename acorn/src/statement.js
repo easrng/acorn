@@ -70,7 +70,7 @@ pp.isAsyncFunction = function() {
   return !lineBreak.test(this.input.slice(this.pos, next)) &&
     this.input.slice(next, next + 8) === "function" &&
     (next + 8 === this.input.length ||
-     !(isIdentifierChar(after = this.fullCharCodeAt(next + 8)) || after === 92 /* '\' */))
+      !(isIdentifierChar(after = this.fullCharCodeAt(next + 8)) || after === 92 /* '\' */))
 }
 
 pp.isUsingKeyword = function(isAwaitUsing, isFor) {
@@ -1121,7 +1121,7 @@ pp.parseImport = function(node) {
     node.specifiers = empty
     node.source = this.parseExprAtom()
   } else {
-    node.specifiers = this.parseImportSpecifiers()
+    node.specifiers = this.parseImportSpecifiers(node)
     this.expectContextual("from")
     node.source = this.type === tt.string ? this.parseExprAtom() : this.unexpected()
   }
@@ -1165,9 +1165,66 @@ pp.parseImportNamespaceSpecifier = function() {
   return this.finishNode(node, "ImportNamespaceSpecifier")
 }
 
-pp.parseImportSpecifiers = function() {
+pp.parseImportSpecifiers = function(node) {
   let nodes = [], first = true
   if (this.type === tt.name) {
+    // Check if the identifier is actually a phase keyword (defer/source)
+    let phase =
+      this.value === "defer" && this.options.defer !== false
+        ? "defer"
+        : this.value === "source" && this.options.source !== false
+          ? "source"
+          : null
+
+    if (phase) {
+      const phaseId = this.parseIdent()
+
+      // If followed by 'from' or a comma, it's a default import named 'defer' or 'source'
+      if (this.isContextual("from") || this.type === tt.comma) {
+        const defaultSpecifier = this.startNodeAt(
+          phaseId.start,
+          phaseId.loc && phaseId.loc.start
+        )
+        defaultSpecifier.local = phaseId
+        this.checkLValSimple(phaseId, BIND_LEXICAL)
+        nodes.push(this.finishNode(defaultSpecifier, "ImportDefaultSpecifier"))
+
+        if (this.eat(tt.comma)) {
+          if (this.type !== tt.star && this.type !== tt.braceL)
+            this.unexpected()
+          nodes.push(...this.parseImportSpecifiers())
+        }
+        return nodes
+      }
+
+      // Otherwise, it is a Phase Import
+      node.phase = phase
+
+      if (phase === "defer" && this.type !== tt.star) {
+        this.raiseRecoverable(
+          phaseId.start,
+          "'import defer' can only be used with namespace imports ('import defer * as identifierName from ...')."
+        )
+      } else if (phase === "source" && this.type !== tt.name) {
+        this.raiseRecoverable(
+          phaseId.start,
+          "'import source' can only be used with direct identifier specifier imports."
+        )
+      }
+
+      const specifiers = this.parseImportSpecifiers()
+
+      if (
+        phase === "source" &&
+        specifiers.some((s) => s.type !== "ImportDefaultSpecifier")
+      ) {
+        this.raiseRecoverable(
+          phaseId.start,
+          "'import source' can only be used with direct identifier specifier imports ('import source identifierName from ...')."
+        )
+      }
+      return specifiers
+    }
     nodes.push(this.parseImportDefaultSpecifier())
     if (!this.eat(tt.comma)) return nodes
   }

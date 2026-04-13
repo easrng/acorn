@@ -136,7 +136,7 @@ pp.parseMaybeAssign = function(forInit, refDestructuringErrors, afterLeftParse) 
   if (afterLeftParse) left = afterLeftParse.call(this, left, startPos, startLoc)
   if (this.type.isAssign) {
     let node = this.startNodeAt(startPos, startLoc)
-    node.operator = this.value
+    const op = node.operator = this.value
     if (this.type === tt.eq)
       left = this.toAssignable(left, false, refDestructuringErrors)
     if (!ownDestructuringErrors) {
@@ -147,7 +147,7 @@ pp.parseMaybeAssign = function(forInit, refDestructuringErrors, afterLeftParse) 
     if (this.type === tt.eq)
       this.checkLValPattern(left)
     else
-      this.checkLValSimple(left)
+      this.checkLValSimple(left, undefined, undefined, op === "??=" || op === "||=" || op === "&&=")
     node.left = left
     this.next()
     node.right = this.parseMaybeAssign(forInit)
@@ -310,8 +310,8 @@ pp.parseExprSubscripts = function(refDestructuringErrors, forInit) {
 
 pp.parseSubscripts = function(base, startPos, startLoc, noCalls, forInit) {
   let maybeAsyncArrow = this.options.ecmaVersion >= 8 && base.type === "Identifier" && base.name === "async" &&
-      this.lastTokEnd === base.end && !this.canInsertSemicolon() && base.end - base.start === 5 &&
-      this.potentialArrowAt === base.start
+    this.lastTokEnd === base.end && !this.canInsertSemicolon() && base.end - base.start === 5 &&
+    this.potentialArrowAt === base.start
   let optionalChained = false
 
   while (true) {
@@ -419,12 +419,12 @@ pp.parseExprAtom = function(refDestructuringErrors, forInit, forNew) {
     this.next()
     if (this.type === tt.parenL && !this.allowDirectSuper)
       this.raise(node.start, "super() call outside constructor of a subclass")
-    // The `super` keyword can appear at below:
-    // SuperProperty:
-    //     super [ Expression ]
-    //     super . IdentifierName
-    // SuperCall:
-    //     super ( Arguments )
+      // The `super` keyword can appear at below:
+      // SuperProperty:
+      //     super [ Expression ]
+      //     super . IdentifierName
+      // SuperCall:
+      //     super ( Arguments )
     if (this.type !== tt.dot && this.type !== tt.bracketL && this.type !== tt.parenL)
       this.unexpected()
     return this.finishNode(node, "Super")
@@ -534,7 +534,7 @@ pp.parseExprImport = function(forNew) {
     let meta = this.startNodeAt(node.start, node.loc && node.loc.start)
     meta.name = "import"
     node.meta = this.finishNode(meta, "Identifier")
-    return this.parseImportMeta(node)
+    return this.parseImportMeta(node, forNew)
   } else {
     this.unexpected()
   }
@@ -578,19 +578,27 @@ pp.parseDynamicImport = function(node) {
   return this.finishNode(node, "ImportExpression")
 }
 
-pp.parseImportMeta = function(node) {
+pp.parseImportMeta = function(node, forNew) {
   this.next() // skip `.`
 
   const containsEsc = this.containsEsc
   node.property = this.parseIdent(true)
 
-  if (node.property.name !== "meta")
+  if (node.property.name !== "meta" && node.property.name !== "defer" && node.property.name !== "source")
     this.raiseRecoverable(node.property.start, "The only valid meta property for import is 'import.meta'")
   if (containsEsc)
-    this.raiseRecoverable(node.start, "'import.meta' must not contain escaped characters")
+    this.raiseRecoverable(node.start, `'import.${node.property.name}' must not contain escaped characters`)
+  if (node.property.name === "defer" || node.property.name === "source") {
+    if (this.type === tt.parenL && !forNew) {
+      const call = this.parseDynamicImport(node)
+      call.phase = node.property.name
+      return call
+    } else {
+      this.raiseRecoverable(node.property.start, `'import.${node.property.name}' must be used in a dynamic import expression`)
+    }
+  }
   if (this.options.sourceType !== "module" && !this.options.allowImportExportEverywhere)
-    this.raiseRecoverable(node.start, "Cannot use 'import.meta' outside a module")
-
+    this.raiseRecoverable(node.start, `Cannot use 'import.${node.property.name}' outside a module`)
   return this.finishNode(node, "MetaProperty")
 }
 
@@ -864,9 +872,9 @@ pp.parsePropertyValue = function(prop, isPattern, isGenerator, isAsync, startPos
     prop.value = this.parseMethod(isGenerator, isAsync)
     prop.kind = "init"
   } else if (!isPattern && !containsEsc &&
-             this.options.ecmaVersion >= 5 && !prop.computed && prop.key.type === "Identifier" &&
-             (prop.key.name === "get" || prop.key.name === "set") &&
-             (this.type !== tt.comma && this.type !== tt.braceR && this.type !== tt.eq)) {
+    this.options.ecmaVersion >= 5 && !prop.computed && prop.key.type === "Identifier" &&
+    (prop.key.name === "get" || prop.key.name === "set") &&
+    (this.type !== tt.comma && this.type !== tt.braceR && this.type !== tt.eq)) {
     if (isGenerator || isAsync) this.unexpected()
     this.parseGetterSetter(prop)
   } else if (this.options.ecmaVersion >= 6 && !prop.computed && prop.key.type === "Identifier") {
