@@ -33,7 +33,7 @@
   require("./tests-using.js");
   require("./tests-commonjs.js");
   require("./tests-import-phases.js");
-  var acorn = require("../acorn/dist/acorn-functional.mjs")
+  var acorn = require("../acorn/dist/acorn.min.mjs")
   var acorn_loose = require("../acorn-loose")
 
   var htmlLog = typeof document === "object" && document.getElementById('log');

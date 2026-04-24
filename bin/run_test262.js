@@ -1,7 +1,7 @@
 const fs = require("fs")
 const path = require("path")
 const run = require("test262-parser-runner")
-const parse = require("../acorn/dist/acorn-functional.mjs").parse
+const parse = require("../acorn/dist/acorn.min.mjs").parse
 
 function loadList(filename) {
   return fs.readFileSync(filename, "utf8")

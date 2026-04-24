@@ -67,7 +67,7 @@ pp.declareName = function(name, bindingType, pos) {
       if (scope.flags & SCOPE_VAR) break
     }
   }
-  if (redeclared) this.raiseRecoverable(pos, `Identifier '${name}' has already been declared`)
+  if (redeclared && !this.__ts_enabled) this.raiseRecoverable(pos, `Identifier '${name}' has already been declared`)
 }
 
 pp.checkLocalExport = function(id) {

@@ -99,7 +99,11 @@ export const defaultOptions = {
   directSourceFile: null,
   // When enabled, parenthesized expressions are represented by
   // (non-standard) ParenthesizedExpression nodes
-  preserveParens: false
+  preserveParens: false,
+  typescript: false,
+  jsx: false,
+  dts: false,
+  disallowAmbiguousJSXLike: false
 }
 
 // Interpret and default an options object
@@ -108,6 +112,14 @@ let warnedAboutEcmaVersion = false
 
 export function getOptions(opts) {
   let options = {}
+
+  if (opts.typescript) {
+    if (opts.locations === false) {
+      throw new Error("You have to enable options.locations while parsing typescript")
+    } else {
+      opts.locations = true
+    }
+  }
 
   for (let opt in defaultOptions)
     options[opt] = opts && hasOwn(opts, opt) ? opts[opt] : defaultOptions[opt]

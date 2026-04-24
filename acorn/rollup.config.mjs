@@ -5,6 +5,8 @@ const copy = (from, to) => ({
   async writeBundle() { await writeFile(to, await readFile(from)) }
 })
 
+const transforms = {stickyRegExp: false, unicodeRegExp: false, dangerousForOf: true, arrow: false, destructuring: false, computedProperty: false, conciseMethodProperty: false, letConst: false}
+
 export default [
   {
     input: "acorn/src/index.js",
@@ -20,7 +22,7 @@ export default [
       }
     ],
     plugins: [
-      buble({transforms: {dangerousForOf: true}}),
+      buble({transforms}),
       copy("acorn/src/acorn.d.ts", "acorn/dist/acorn.d.ts"),
       copy("acorn/src/acorn.d.ts", "acorn/dist/acorn.d.mts")
     ]
@@ -34,7 +36,7 @@ export default [
       paths: {acorn: "./acorn.js"}
     },
     plugins: [
-      buble({transforms: {dangerousForOf: true}})
+      buble({transforms})
     ]
   }
 ]

@@ -209,12 +209,38 @@ const functionalRefactorPlugin = ({ types: t }) => {
           },
         });
 
+        const decls = []
         assignments.forEach(({ path: assignPath, propertyName, func }) => {
           const newFuncName = `pp_${propertyName}`;
           const selfParam = t.identifier("self");
 
           func.get("body").traverse({
             ThisExpression(thisPath) {
+              const parentPath = thisPath.parentPath;
+              const grandParentPath = parentPath && parentPath.parentPath;
+              const greatGrandParentPath = grandParentPath && grandParentPath.parentPath;
+
+              if (
+                parentPath.isMemberExpression() &&
+                grandParentPath.isMemberExpression() && grandParentPath.node.property.name === 'bind' &&
+                greatGrandParentPath.isCallExpression()
+              ) {
+                const methodIdentifier = parentPath.node.property;
+                const bindCall = greatGrandParentPath.node;
+
+                if (t.isIdentifier(methodIdentifier) && t.isThisExpression(bindCall.arguments[0])) {
+                  // 1. Change this.method.bind to pp_method.bind
+                  grandParentPath.get("object").replaceWith(t.identifier(`pp_${methodIdentifier.name}`));
+
+                  // 2. Change .bind(this, ...) to .bind(null, self, ...)
+                  bindCall.arguments[0] = t.nullLiteral();
+                  bindCall.arguments.splice(1, 0, selfParam);
+
+                  greatGrandParentPath.skip();
+                  return;
+                }
+              }
+
               if (
                 t.isMemberExpression(thisPath.parent) &&
                 t.isCallExpression(thisPath.parentPath.parent)
@@ -235,19 +261,40 @@ const functionalRefactorPlugin = ({ types: t }) => {
               thisPath.replaceWith(selfParam);
             },
             Function(innerFuncPath) {
+              if (innerFuncPath.isArrowFunctionExpression()) return
               innerFuncPath.skip();
             },
           });
 
-          const funcDecl = t.functionDeclaration(
-            t.identifier(newFuncName),
-            [selfParam, ...func.node.params],
-            func.node.body,
-          );
+          if (assignPath.getFunctionParent()) {
+            assignPath.node.left = t.identifier(newFuncName)
+            assignPath.node.right = t.functionExpression(
+              t.identifier("_" + newFuncName),
+              [selfParam, ...func.node.params],
+              func.node.body,
+            )
+            decls.push(t.variableDeclaration("var", [
+              t.variableDeclarator(
+                t.identifier(newFuncName))]))
+          } else {
+            const funcDecl = t.variableDeclaration("var", [
+              t.variableDeclarator(
+                t.identifier(newFuncName),
+                t.functionExpression(
+                  t.identifier("_" + newFuncName),
+                  [selfParam, ...func.node.params],
+                  func.node.body,
+                ),
+              ),
+            ])
 
-          path.pushContainer("body", funcDecl);
-          assignPath.parentPath.remove();
+            decls.push(funcDecl)
+
+            assignPath.parentPath.remove();
+          }
         });
+
+        path.unshiftContainer("body", decls);
 
         path.traverse({
           Function(funcPath) {
@@ -412,7 +459,7 @@ const functionalRefactorPlugin = ({ types: t }) => {
                 }
 
                 // 2. NEW ALLOWANCE: pp_regexp_* allowing state.eat and state.raise
-                const isInsideRegexp = funcName.startsWith("pp_regexp_");
+                const isInsideRegexp = funcName.startsWith("_pp_regexp_");
                 const isStateObject = t.isIdentifier(valPath.node.object, {
                   name: "state",
                 });

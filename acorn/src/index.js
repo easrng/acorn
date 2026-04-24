@@ -28,6 +28,7 @@ import {TokContext, types as tokContexts} from "./tokencontext.js"
 import {isIdentifierChar, isIdentifierStart} from "./identifier.js"
 import {Token} from "./tokenize.js"
 import {isNewLine, lineBreak, lineBreakG, nonASCIIwhitespace} from "./whitespace.js"
+import "./ext.js"
 
 export const version = "8.16.0"
 export {

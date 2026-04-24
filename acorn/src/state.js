@@ -97,6 +97,22 @@ export class Parser {
     // Each element has two properties: 'declared' and 'used'.
     // When it exited from the outermost class definition, all used private names must be declared.
     this.privateNameStack = []
+
+    // TS
+    this.inType = false
+    this.__ts_isLookahead = false
+    this.__ts_isAmbientContext = !!options.dts
+    this.__ts_inAbstractClass = false
+    this.__ts_inDisallowConditionalTypesContext = false
+    this.__ts_maybeInArrowParameters = false
+    this.__ts_shouldParseArrowReturnType = undefined
+    this.__ts_shouldParseAsyncArrowReturnType = undefined
+    this.__ts_decoratorStack = [[]]
+    this.__ts_importsStack = [[]]
+    this.__ts_enabled = !!options.typescript
+    this.__ts_jsxEnabled = !!options.jsx
+    this.__ts_decoratorsEnabled = options.ecmaVersion === 1e8 || !!options.typescript
+    this.__ts_importOrExportOuterKind = undefined
   }
 
   parse() {
@@ -139,7 +155,7 @@ export class Parser {
     for (let i = this.scopeStack.length - 1; i >= 0; i--) {
       let {flags} = this.scopeStack[i]
       if (flags & (SCOPE_CLASS_STATIC_BLOCK | SCOPE_CLASS_FIELD_INIT) ||
-          ((flags & SCOPE_FUNCTION) && !(flags & SCOPE_ARROW))) return true
+        ((flags & SCOPE_FUNCTION) && !(flags & SCOPE_ARROW))) return true
     }
     return false
   }
